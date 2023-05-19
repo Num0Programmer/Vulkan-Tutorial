@@ -8,7 +8,7 @@ therefore, if you are interested in a specific concept, use the branch list to
 select the branch with the relevant name and/or chapter number.
 
 ### Branch naming scheme
-<##>-<chapter-name>
+<##>-\<chapter-name>
 
 ### Note
 This is not my own implementation - besides that which I had to add or change
