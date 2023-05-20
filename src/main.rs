@@ -6,10 +6,14 @@
 )]
 
 use anyhow::{anyhow, Result};
+use std::collections::HashSet;
+use std::ffi::CStr;
+use std::os::raw::c_void;
 use log::*;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-use vulkanalia::window as vk_window;
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::window as vk_window;
+use vulkanalia::vk::ExtDebugUtilsExtensions;
 use vulkanalia::Version;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
@@ -17,6 +21,9 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
+const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
+const VALIDATION_LAYER: vk::ExtensionName =
+    vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 
 fn main() -> Result<()>
 {
