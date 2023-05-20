@@ -13,7 +13,7 @@ use log::*;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::window as vk_window;
-use vulkanalia::vk::ExtDebugUtilsExtensions;
+use vulkanalia::vk::ExtDebugUtilsExtension;
 use vulkanalia::Version;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
@@ -75,7 +75,9 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
         .collect::<Vec<_>>();
 
     // required by Vulkan SDK on macOS since 1.3.216
-    let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION
+    let flags =
+        if cfg!(target_os = "macos")
+            && entry.version()? >= PORTABILITY_MACOS_VERSION
     {
         info!("Enabling extensions for macOS porability.");
         extensions.push(vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION.name.as_ptr());
