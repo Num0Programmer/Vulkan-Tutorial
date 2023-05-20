@@ -69,6 +69,26 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
         .engine_version(vk::make_version(1, 0, 0))
         .api_version(vk::make_version(1, 0, 0));
 
+    let available_layers = entry
+        .enumerate_instance_layer_properties()?
+        .iter()
+        .map(|l| l.layer_name)
+        .collect::<HashSet<_>>();
+
+    if VALIDATION_ENABLED && !available_layers.contains(&VALIDATION_LAYER)
+    {
+        return Err(anyhow!("Validation layer requested but not supported."));
+    }
+
+    let layers = if VALIDATION_ENABLED
+    {
+        vec![VALIDATION_LAYER.as_ptr()]
+    }
+    else
+    {
+        Vec::new()
+    };
+
     let mut extensions = vk_window::get_required_instance_extensions(window)
         .iter()
         .map(|e| e.as_ptr())
@@ -91,6 +111,7 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
 
     let info = vk::InstanceCreateInfo::builder()
         .application_info(&application_info)
+        .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions)
         .flags(flags);
 
