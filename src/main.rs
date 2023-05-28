@@ -60,7 +60,11 @@ fn main() -> Result<()>
     });
 }
 
-unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
+unsafe fn create_instance(
+    window: &Window,
+    entry: &Entry,
+    data: &mut AppData
+) -> Result<Instance>
 {
     let application_info = vk::ApplicationInfo::builder()
         .application_name(b"Vulkan Tutorial\0")
@@ -94,6 +98,11 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
         .map(|e| e.as_ptr())
         .collect::<Vec<_>>();
 
+    if VALIDATION_ENABLED
+    {
+        extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
+    }
+
     // required by Vulkan SDK on macOS since 1.3.216
     let flags =
         if cfg!(target_os = "macos")
@@ -109,13 +118,57 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
         vk::InstanceCreateFlags::empty()
     };
 
-    let info = vk::InstanceCreateInfo::builder()
+    let mut info = vk::InstanceCreateInfo::builder()
         .application_info(&application_info)
         .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions)
         .flags(flags);
 
-    Ok(entry.create_instance(&info, None)?)
+    // structure which provides information about debug callback and how
+    // it will be called
+    let mut debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+        .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
+        .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+        .user_callback(Some(debug_callback));
+
+    let instance = entry.create_instance(&info, None)?;
+
+    if VALIDATION_ENABLED
+    {
+        info.push_next(&mut debug_info);
+    }
+
+    Ok(instance)
+}
+
+extern "system" fn debug_callback(
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    type_: vk::DebugUtilsMessageTypeFlagsEXT,
+    data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _: *mut c_void
+) -> vk::Bool32
+{
+    let data = unsafe { *data };
+    let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
+
+    if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+    {
+        error!("({:?}) {}", type_, message);
+    }
+    else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+    {
+        warn!("({:?}) {}", type_, message);
+    }
+    else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+    {
+        debug!("({:?}) {}", type_, message);
+    }
+    else
+    {
+        trace!("({:?}) {}", type_, message);
+    }
+
+    vk::FALSE
 }
 
 /// vulkan application
@@ -123,7 +176,8 @@ unsafe fn create_instance(window: &Window, entry: &Entry) -> Result<Instance>
 struct App
 {
     entry: Entry,
-    instance: Instance
+    instance: Instance,
+    data: AppData
 }
 
 impl App
@@ -133,8 +187,9 @@ impl App
     {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
-        let instance = create_instance(window, &entry)?;
-        Ok(Self { entry, instance })
+        let mut data = AppData::default();
+        let instance = create_instance(window, &entry, &mut data)?;
+        Ok(Self { entry, instance, data })
     }
 
     /// renders a frame from our vulkan application
@@ -146,11 +201,20 @@ impl App
     /// destroys our vulkan application
     unsafe fn destroy(&mut self)
     {
+        if VALIDATION_ENABLED
+        {
+            self.instance.destroy_debug_utils_messenger_ext(
+                self.data.messenger, None
+            );
+        }
         self.instance.destroy_instance(None);
     }
 }
 
 /// the vulkan handles and associated properties used by our vulkan app
 #[derive(Clone, Debug, Default)]
-struct AppData {}
+struct AppData
+{
+    messenger: vk::DebugUtilsMessengerEXT
+}
 
