@@ -72,6 +72,13 @@ unsafe fn check_physical_device(
 {
     QueueFamilyIndices::get(instance, data, physical_device)?;
     check_physical_device_extensions(instance, physical_device)?;
+
+    let support = SwapchainSupport::get(instance, data, physical_device)?;
+    if support.formats.is_empty() || support.present_modes.is_empty()
+    {
+        return Err(anyhow!(SuitabilityError("Insufficient swapchain support.")));
+    }
+
     Ok(())
 }
 
@@ -97,8 +104,7 @@ unsafe fn check_physical_device_extensions(
 
 unsafe fn create_instance(
     window: &Window,
-    entry: &Entry,
-    data: &mut AppData
+    entry: &Entry, data: &mut AppData
 ) -> Result<Instance>
 {
     let application_info = vk::ApplicationInfo::builder()
@@ -206,7 +212,10 @@ unsafe fn create_logical_device(
         vec![]
     };
 
-    let mut extensions = vec![];
+    let mut extensions = DEVICE_EXTENSIONS
+        .iter()
+        .map(|n| n.as_ptr())
+        .collect::<Vec<_>>();
     // required by Vulkan SDK on macOS since 1.3.216
     if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION
     {
@@ -226,6 +235,20 @@ unsafe fn create_logical_device(
     data.present_queue = device.get_device_queue(indices.present, 0);
 
     Ok(device)
+}
+
+fn get_swapchain_surface_format(
+    formats: &[vk::SurfaceFormatKHR]
+) -> vk::SurfaceFormatKHR
+{
+    formats
+        .iter()
+        .cloned()
+        .find(|f| {
+            f.format == vk::Format::B8G8R8A8_SRGB
+                && f.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+        })
+        .unwrap_or_else(|| formats[0])
 }
 
 unsafe fn pick_physical_device(
@@ -341,6 +364,40 @@ struct AppData
 #[derive(Debug, Error)]
 #[error("Missing {0}.")]
 pub struct SuitabilityError(pub &'static str);
+
+#[derive(Clone, Debug)]
+struct SwapchainSupport
+{
+    capabilities: vk::SurfaceCapabilitiesKHR,
+    formats: Vec<vk::SurfaceFormatKHR>,
+    present_modes: Vec<vk::PresentModeKHR>
+}
+
+impl SwapchainSupport
+{
+    unsafe fn get(
+        instance: &Instance,
+        data: &AppData,
+        physical_device: vk::PhysicalDevice
+    ) -> Result<Self>
+    {
+        Ok(Self
+        {
+            capabilities: instance
+                .get_physical_device_surface_capabilities_khr(
+                    physical_device, data.surface
+                )?,
+            formats: instance
+                .get_physical_device_surface_formats_khr(
+                    physical_device, data.surface
+                )?,
+            present_modes: instance
+                .get_physical_device_surface_present_modes_khr(
+                    physical_device, data.surface
+                )?
+        })
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 struct QueueFamilyIndices
